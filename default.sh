@@ -108,7 +108,7 @@ function provisioning_start() {
     provisioning_get_pip_packages
     
     # Get models
-    provisioning_get_leffa_repo
+    provisioning_get_models_repo
     provisioning_get_models \
         "${WORKSPACE}/storage/stable_diffusion/models/ckpt" \
         "${CHECKPOINT_MODELS[@]}"
@@ -200,30 +200,31 @@ function provisioning_get_default_workflow() {
     fi
 }
 
-# New function to handle cloning/updating the Leffa repository
-function provisioning_get_leffa_repo() {
-    LEFFA_REPO_URL="https://huggingface.co/crimsoncult/leffa-safetensors"
-    LEFFA_TARGET_DIR="${WORKSPACE}/storage/stable_diffusion/models/Leffa"
-    
-    printf "Handling Leffa models repository: %s\n" "${LEFFA_REPO_URL}"
-    if [[ -d "${LEFFA_TARGET_DIR}/.git" ]]; then
+# New function to handle cloning/updating the main models repository
+function provisioning_get_models_repo() {
+    MODELS_REPO_URL="https://huggingface.co/crimsoncult/comfyui-runpod-models"
+    MODELS_TARGET_DIR="${WORKSPACE}/storage/stable_diffusion/models"
+
+    printf "Handling models repository: %s\n" "${MODELS_REPO_URL}"
+    if [[ -d "${MODELS_TARGET_DIR}/.git" ]]; then
         # Check AUTO_UPDATE setting like provisioning_get_nodes does
         if [[ ${AUTO_UPDATE,,} != "false" ]]; then
-            printf "Updating repository: %s...\n" "${LEFFA_REPO_URL}"
+            printf "Updating repository: %s...\n" "${MODELS_REPO_URL}"
             # Need git-lfs installed
-            ( cd "${LEFFA_TARGET_DIR}" && git pull && git lfs pull )
+            ( cd "${MODELS_TARGET_DIR}" && git pull && git lfs pull )
         else
-             printf "Skipping update for %s as AUTO_UPDATE is false.\n" "${LEFFA_REPO_URL}"
+             printf "Skipping update for %s as AUTO_UPDATE is false.\n" "${MODELS_REPO_URL}"
         fi
     else
-        printf "Cloning repository: %s...\n" "${LEFFA_REPO_URL}"
-        # Ensure parent directory exists
-        mkdir -p "$(dirname "${LEFFA_TARGET_DIR}")"
+        printf "Cloning repository: %s...\n" "${MODELS_REPO_URL}"
+        # Ensure parent directory exists, but clone creates the target dir itself
+        mkdir -p "$(dirname "${MODELS_TARGET_DIR}")"
         # Need git-lfs installed
-        git clone "${LEFFA_REPO_URL}" "${LEFFA_TARGET_DIR}" --recursive
+        # Clone the repository *into* the target directory
+        git clone "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}" --recursive
         # Need to explicitly pull LFS files after clone
-        printf "Pulling LFS files for %s...\n" "${LEFFA_REPO_URL}"
-        ( cd "${LEFFA_TARGET_DIR}" && git lfs install --system --skip-repo && git lfs pull )
+        printf "Pulling LFS files for %s...\n" "${MODELS_REPO_URL}"
+        ( cd "${MODELS_TARGET_DIR}" && git lfs install --system --skip-repo && git lfs pull )
     fi
 }
 
