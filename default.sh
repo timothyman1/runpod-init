@@ -179,14 +179,37 @@ function provisioning_get_workflows() {
     for repo in "${WORKFLOWS[@]}"; do
         dir=$(basename "$repo" .git)
         path="/opt/ComfyUI/user/default/workflows/${dir}"
+
+        # Determine the clone URL, potentially adding the token
+        clone_url="$repo"
+        pull_cmd="git pull" # Default pull command
+
+        # Check if GITHUB_TOKEN is set and the repo uses HTTPS
+        if [[ -n "$GITHUB_TOKEN" && "$repo" == https://*github.com* ]]; then
+            # Insert the token into the HTTPS URL for cloning
+            # Format: https://<token>@github.com/user/repo.git
+            clone_url="${repo/https:\/\//https:\/\/${GITHUB_TOKEN}@}"
+            printf "Using GITHUB_TOKEN for private repository: %s\n" "${repo}"
+            # For pulling, git might cache the credential after the initial clone,
+            # but explicitly setting the remote URL ensures it works if cache fails.
+            # This assumes the remote name is 'origin'.
+            pull_cmd="git remote set-url origin ${clone_url} && git pull"
+
+        elif [[ "$repo" == git@* ]]; then
+             printf "Using SSH URL for repository: %s (Ensure SSH key is configured)\n" "${repo}"
+             # SSH cloning/pulling requires pre-configured keys.
+        fi
+
         if [[ -d "$path" ]]; then
             if [[ ${AUTO_UPDATE,,} != "false" ]]; then
                 printf "Updating workflows: %s...\n" "${repo}"
-                ( cd "$path" && git pull )
+                # Use the potentially modified pull command
+                ( cd "$path" && eval "$pull_cmd" )
             fi
         else
             printf "Cloning workflows: %s...\n" "${repo}"
-            git clone "$repo" "$path"
+            # Use the potentially modified clone_url
+            git clone "$clone_url" "$path"
         fi
     done
 }
