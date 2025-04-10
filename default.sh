@@ -236,11 +236,11 @@ function provisioning_get_default_workflow() {
 function provisioning_get_models_repo() {
     MODELS_REPO_URL="https://huggingface.co/crimsoncult/comfyui-runpod-models"
     MODELS_TARGET_DIR="${WORKSPACE}/ComfyUI/models"
-    LEFFA_CHECK_PATH="${MODELS_TARGET_DIR}/Leffa" # Check for a specific directory instead of .git
+    LEFFA_CHECK_PATH="${MODELS_TARGET_DIR}/Leffa" # Check for a specific directory
 
     printf "Handling models repository: %s in %s\n" "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}"
 
-    # Check if the target directory exists and contains the 'Leffa' subdirectory
+    # Check if the target directory contains the 'Leffa' subdirectory
     if [[ -d "${LEFFA_CHECK_PATH}" ]]; then
         # Leffa directory exists, assume it's a git repo and check if auto-update is enabled
         if [[ ${AUTO_UPDATE,,} != "false" ]]; then
@@ -252,19 +252,36 @@ function provisioning_get_models_repo() {
              printf "Skipping update for %s as AUTO_UPDATE is false.\n" "${MODELS_REPO_URL}"
         fi
     else
-        # Leffa directory does not exist, clone the repository.
-        printf "Leffa directory not found. Cloning repository: %s...\n" "${MODELS_REPO_URL}"
-        # Ensure the parent directory exists before cloning
-        mkdir -p "$(dirname "${MODELS_TARGET_DIR}")"
-        # Clone the repository recursively to the target directory
-        git clone "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}" --recursive
+        # Leffa directory does not exist. Clone to temp and merge to handle existing target directory.
+        printf "Leffa directory not found. Initializing or merging repository content...\n"
+        MODELS_TMP_DIR="/tmp/comfyui_models_clone_$(date +%s)"
+        printf "Cloning %s to temp location %s...\n" "${MODELS_REPO_URL}" "${MODELS_TMP_DIR}"
+
+        # Clean up any previous temporary clone just in case
+        rm -rf "${MODELS_TMP_DIR}"
+        # Clone the repository recursively to the temp directory
+        git clone "${MODELS_REPO_URL}" "${MODELS_TMP_DIR}" --recursive
         if [[ $? -ne 0 ]]; then
-            printf "ERROR: Failed to clone repository %s to %s\n" "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}"
+            printf "ERROR: Failed to clone repository %s to temp location %s\n" "${MODELS_REPO_URL}" "${MODELS_TMP_DIR}"
+            rm -rf "${MODELS_TMP_DIR}" # Clean up failed clone attempt
         else
-            # Pull LFS files within the target directory
-            printf "Pulling LFS files for %s...\n" "${MODELS_REPO_URL}"
-            ( cd "${MODELS_TARGET_DIR}" && git lfs pull ) || printf "WARN: git lfs pull failed in %s\n" "${MODELS_TARGET_DIR}"
-            printf "Repository cloning complete in %s\n" "${MODELS_TARGET_DIR}"
+            # Pull LFS files within the temporary directory
+            printf "Pulling LFS files for %s in temp location...\n" "${MODELS_REPO_URL}"
+            ( cd "${MODELS_TMP_DIR}" && git lfs pull ) || printf "WARN: git lfs pull failed in temp location %s\n" "${MODELS_TMP_DIR}"
+
+            # Ensure the final target directory exists
+            mkdir -p "${MODELS_TARGET_DIR}"
+            # Merge the cloned repository contents into the target directory
+            printf "Merging repository contents into %s...\n" "${MODELS_TARGET_DIR}"
+            # Copy files, excluding .git first to overlay content
+            rsync -a --exclude='.git' "${MODELS_TMP_DIR}/" "${MODELS_TARGET_DIR}/"
+            # Copy the .git directory to make the target a git repo for future pulls
+            # Use rsync with --ignore-existing for .git to avoid clobbering potentially different .git dir? Or just copy? Let's copy for now.
+            rsync -a "${MODELS_TMP_DIR}/.git" "${MODELS_TARGET_DIR}/"
+
+            # Clean up the temporary directory
+            rm -rf "${MODELS_TMP_DIR}"
+            printf "Repository initialization/merge complete in %s\n" "${MODELS_TARGET_DIR}"
         fi
     fi
 }
