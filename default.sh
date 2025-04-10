@@ -32,6 +32,7 @@ NODES=(
     "https://github.com/ltdrdata/ComfyUI-Impact-Pack"
     "https://github.com/kijai/ComfyUI-KJNodes"
     "https://github.com/kijai/ComfyUI-segment-anything-2"
+    "https://github.com/crystian/ComfyUI-Crystools"
 )
 
 WORKFLOWS=(
@@ -107,8 +108,6 @@ function provisioning_start() {
     provisioning_get_nodes
     provisioning_get_pip_packages
     
-    # Get models
-    provisioning_get_models_repo
     provisioning_get_models \
         "${WORKSPACE}/storage/stable_diffusion/models/ckpt" \
         "${CHECKPOINT_MODELS[@]}"
@@ -127,7 +126,8 @@ function provisioning_start() {
     provisioning_get_models \
         "${WORKSPACE}/storage/stable_diffusion/models/esrgan" \
         "${ESRGAN_MODELS[@]}"
-    
+
+    provisioning_get_models_repo
     provisioning_get_workflows
     provisioning_print_end
 }
@@ -226,7 +226,7 @@ function provisioning_get_default_workflow() {
 # New function to handle cloning/updating the main models repository
 function provisioning_get_models_repo() {
     MODELS_REPO_URL="https://huggingface.co/crimsoncult/comfyui-runpod-models"
-    MODELS_TARGET_DIR="${WORKSPACE}/ComfyUI/models"
+    MODELS_TARGET_DIR="/opt/ComfyUI/models"
 
     printf "Handling models repository: %s\n" "${MODELS_REPO_URL}"
     if [[ -d "${MODELS_TARGET_DIR}/.git" ]]; then
