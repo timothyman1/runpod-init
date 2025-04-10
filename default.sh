@@ -259,29 +259,37 @@ function provisioning_get_models_repo() {
 
         # Clean up any previous temporary clone just in case
         rm -rf "${MODELS_TMP_DIR}"
-        # Clone the repository recursively to the temp directory
-        git clone "${MODELS_REPO_URL}" "${MODELS_TMP_DIR}" --recursive
+        # Clone the repository recursively *without checking out* to the temp directory first
+        git clone --no-checkout "${MODELS_REPO_URL}" "${MODELS_TMP_DIR}"
         if [[ $? -ne 0 ]]; then
-            printf "ERROR: Failed to clone repository %s to temp location %s\n" "${MODELS_REPO_URL}" "${MODELS_TMP_DIR}"
+            printf "ERROR: Failed to clone repository structure %s to temp location %s\n" "${MODELS_REPO_URL}" "${MODELS_TMP_DIR}"
             rm -rf "${MODELS_TMP_DIR}" # Clean up failed clone attempt
         else
-            # Pull LFS files within the temporary directory
-            printf "Pulling LFS files for %s in temp location...\n" "${MODELS_REPO_URL}"
-            ( cd "${MODELS_TMP_DIR}" && git lfs pull ) || printf "WARN: git lfs pull failed in temp location %s\n" "${MODELS_TMP_DIR}"
+            printf "Checking out repository content in %s...\n" "${MODELS_TMP_DIR}"
+            if (cd "${MODELS_TMP_DIR}" && git checkout main); then # Assuming main branch
+                # Pull LFS files within the temporary directory
+                printf "Pulling LFS files for %s in temp location...\n" "${MODELS_REPO_URL}"
+                if (cd "${MODELS_TMP_DIR}" && git lfs pull); then
+                    # Ensure the final target directory exists
+                    mkdir -p "${MODELS_TARGET_DIR}"
+                    # Merge the cloned repository contents into the target directory
+                    printf "Merging repository contents into %s...\n" "${MODELS_TARGET_DIR}"
+                    # Copy files, excluding .git first to overlay content
+                    rsync -a --exclude='.git' "${MODELS_TMP_DIR}/" "${MODELS_TARGET_DIR}/"
+                    # Copy the .git directory to make the target a git repo for future pulls
+                    rsync -a "${MODELS_TMP_DIR}/.git" "${MODELS_TARGET_DIR}/"
 
-            # Ensure the final target directory exists
-            mkdir -p "${MODELS_TARGET_DIR}"
-            # Merge the cloned repository contents into the target directory
-            printf "Merging repository contents into %s...\n" "${MODELS_TARGET_DIR}"
-            # Copy files, excluding .git first to overlay content
-            rsync -a --exclude='.git' "${MODELS_TMP_DIR}/" "${MODELS_TARGET_DIR}/"
-            # Copy the .git directory to make the target a git repo for future pulls
-            # Use rsync with --ignore-existing for .git to avoid clobbering potentially different .git dir? Or just copy? Let's copy for now.
-            rsync -a "${MODELS_TMP_DIR}/.git" "${MODELS_TARGET_DIR}/"
-
-            # Clean up the temporary directory
-            rm -rf "${MODELS_TMP_DIR}"
-            printf "Repository initialization/merge complete in %s\n" "${MODELS_TARGET_DIR}"
+                    # Clean up the temporary directory
+                    rm -rf "${MODELS_TMP_DIR}"
+                    printf "Repository initialization/merge complete in %s\n" "${MODELS_TARGET_DIR}"
+                else
+                    printf "ERROR: Failed to pull LFS files in temp location %s\n" "${MODELS_TMP_DIR}"
+                    rm -rf "${MODELS_TMP_DIR}" # Clean up failed LFS pull
+                fi
+            else
+                printf "ERROR: Failed to checkout main branch in temp location %s\n" "${MODELS_TMP_DIR}"
+                rm -rf "${MODELS_TMP_DIR}" # Clean up failed checkout
+            fi
         fi
     fi
 }
