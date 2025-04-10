@@ -8,7 +8,7 @@
 
 #DEFAULT_WORKFLOW="https://..."
 
-DEFAULT_WORKFLOW="https://raw.githubusercontent.com/ai-dock/comfyui/main/config/provisioning/default.sh"
+DEFAULT_WORKFLOW="https://raw.githubusercontent.com/timothyman1/comfyui-workflows/refs/heads/main/Leffa.json?token=GHSAT0AAAAAADB5OGPEZ32EERNVGCYNXN7KZ7XLBKA"
 
 APT_PACKAGES=(
     #"package-1"
@@ -71,6 +71,11 @@ ESRGAN_MODELS=(
     # "https://huggingface.co/Akumetsu971/SD_Anime_Futuristic_Armor/resolve/main/4x_NMKD-Siax_200k.pth"
 )
 
+CLIP_MODELS=(
+	"https://huggingface.co/camenduru/FLUX.1-dev/resolve/main/clip_l.safetensors"
+	"https://huggingface.co/camenduru/FLUX.1-dev/resolve/main/t5xxl_fp16.safetensors"
+)
+
 CONTROLNET_MODELS=(
     # "https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/diffusers_xl_canny_mid.safetensors"
     # "https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/diffusers_xl_depth_mid.safetensors?download"
@@ -106,28 +111,32 @@ function provisioning_start() {
     provisioning_print_header
     provisioning_get_apt_packages
     provisioning_get_nodes
+    provisioning_get_models_repo
     provisioning_get_pip_packages
     
     provisioning_get_models \
-        "${WORKSPACE}/storage/stable_diffusion/models/ckpt" \
+        "${WORKSPACE}/ComfyUI/models/ckpt" \
         "${CHECKPOINT_MODELS[@]}"
     provisioning_get_models \
-        "${WORKSPACE}/storage/stable_diffusion/models/unet" \
+        "${WORKSPACE}/ComfyUI/models/unet" \
         "${UNET_MODELS[@]}"
     provisioning_get_models \
-        "${WORKSPACE}/storage/stable_diffusion/models/lora" \
+        "${WORKSPACE}/ComfyUI/models/clip" \
+        "${CLIP_MODELS[@]}"
+    provisioning_get_models \
+        "${WORKSPACE}/ComfyUI/models/lora" \
         "${LORA_MODELS[@]}"
     provisioning_get_models \
-        "${WORKSPACE}/storage/stable_diffusion/models/controlnet" \
+        "${WORKSPACE}/ComfyUI/models/controlnet" \
         "${CONTROLNET_MODELS[@]}"
     provisioning_get_models \
-        "${WORKSPACE}/storage/stable_diffusion/models/vae" \
+        "${WORKSPACE}/ComfyUI/models/vae" \
         "${VAE_MODELS[@]}"
     provisioning_get_models \
-        "${WORKSPACE}/storage/stable_diffusion/models/esrgan" \
+        "${WORKSPACE}/ComfyUI/models/esrgan" \
         "${ESRGAN_MODELS[@]}"
 
-    provisioning_get_models_repo
+    
     provisioning_get_workflows
     provisioning_print_end
 }
@@ -227,25 +236,28 @@ function provisioning_get_default_workflow() {
 function provisioning_get_models_repo() {
     MODELS_REPO_URL="https://huggingface.co/crimsoncult/comfyui-runpod-models"
     MODELS_TARGET_DIR="/opt/ComfyUI/models"
+    GIT_DIR="${MODELS_TARGET_DIR}/.git"
 
-    printf "Handling models repository: %s\n" "${MODELS_REPO_URL}"
-    if [[ -d "${MODELS_TARGET_DIR}/.git" ]]; then
-        # Check AUTO_UPDATE setting like provisioning_get_nodes does
+    printf "Handling models repository: %s in %s\n" "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}"
+
+    # Check if the git repository directory exists
+    if [[ -d "${GIT_DIR}" ]]; then
+        # Existing repository found, check if auto-update is enabled
         if [[ ${AUTO_UPDATE,,} != "false" ]]; then
             printf "Updating repository: %s...\n" "${MODELS_REPO_URL}"
-            # Need git-lfs installed
+            # Pull latest changes and LFS files
             ( cd "${MODELS_TARGET_DIR}" && git pull && git lfs pull )
         else
              printf "Skipping update for %s as AUTO_UPDATE is false.\n" "${MODELS_REPO_URL}"
         fi
     else
-        printf "Cloning repository: %s...\n" "${MODELS_REPO_URL}"
-        # Ensure parent directory exists, but clone creates the target dir itself
-        mkdir -p "$(dirname "${MODELS_TARGET_DIR}")"
-        # Need git-lfs installed
-        # Clone the repository *into* the target directory
+        # No repository found, clone it
+        printf "Cloning repository: %s into %s...\n" "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}"
+        # Ensure parent directory exists if MODELS_TARGET_DIR is nested
+        # mkdir -p "$(dirname "${MODELS_TARGET_DIR}")" # Usually /opt/ComfyUI already exists
+        # Clone the repository recursively
         git clone "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}" --recursive
-        # Need to explicitly pull LFS files after clone
+        # Install LFS hooks system-wide (if not already done) and pull LFS files
         printf "Pulling LFS files for %s...\n" "${MODELS_REPO_URL}"
         ( cd "${MODELS_TARGET_DIR}" && git lfs install --system --skip-repo && git lfs pull )
     fi
