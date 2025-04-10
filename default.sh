@@ -72,8 +72,8 @@ ESRGAN_MODELS=(
 )
 
 CLIP_MODELS=(
-	"https://huggingface.co/camenduru/FLUX.1-dev/resolve/main/clip_l.safetensors"
-	"https://huggingface.co/camenduru/FLUX.1-dev/resolve/main/t5xxl_fp16.safetensors"
+	# "https://huggingface.co/camenduru/FLUX.1-dev/resolve/main/clip_l.safetensors"
+	# "https://huggingface.co/camenduru/FLUX.1-dev/resolve/main/t5xxl_fp16.safetensors"
 )
 
 CONTROLNET_MODELS=(
