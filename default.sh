@@ -237,59 +237,65 @@ function provisioning_get_models_repo() {
     MODELS_REPO_URL="https://huggingface.co/crimsoncult/comfyui-runpod-models"
     MODELS_TARGET_DIR="${WORKSPACE}/ComfyUI/models"
     LEFFA_CHECK_PATH="${MODELS_TARGET_DIR}/Leffa" # Check for a specific directory
+    GIT_DIR_CHECK="${MODELS_TARGET_DIR}/.git"
 
-    printf "Handling models repository: %s in %s\n" "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}"
+    printf "Handling models repository: %s in %s\\n" "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}"
 
-    # Check if the target directory contains the 'Leffa' subdirectory
-    if [[ -d "${LEFFA_CHECK_PATH}" ]]; then
-        # Leffa directory exists, assume it's a git repo and check if auto-update is enabled
+    # Ensure the target directory exists
+    mkdir -p "${MODELS_TARGET_DIR}"
+
+    # Check if the target directory contains the 'Leffa' subdirectory and is a git repo
+    if [[ -d "${LEFFA_CHECK_PATH}" && -d "${GIT_DIR_CHECK}" ]]; then
+        # Leffa directory and .git exist, assume it's the correct repo and check if auto-update is enabled
         if [[ ${AUTO_UPDATE,,} != "false" ]]; then
-            printf "Leffa directory found. Updating repository: %s...\n" "${MODELS_REPO_URL}"
-            # Pull latest changes and LFS files
-            # Note: This assumes MODELS_TARGET_DIR is the root of the git repo
-            ( cd "${MODELS_TARGET_DIR}" && git pull && git lfs pull ) || printf "WARN: Failed to update repository in %s. It might not be a git repository or pull failed.\n" "${MODELS_TARGET_DIR}"
+            printf "Leffa directory and .git found. Updating repository: %s...\\n" "${MODELS_REPO_URL}"
+            # Pull latest changes and LFS files directly in the target directory
+            ( cd "${MODELS_TARGET_DIR}" && git pull && git lfs pull ) || printf "WARN: Failed to update repository in %s. Pull or LFS pull failed.\\n" "${MODELS_TARGET_DIR}"
         else
-             printf "Skipping update for %s as AUTO_UPDATE is false.\n" "${MODELS_REPO_URL}"
+             printf "Skipping update for %s as AUTO_UPDATE is false.\\n" "${MODELS_REPO_URL}"
         fi
     else
-        # Leffa directory does not exist. Clone to temp and merge to handle existing target directory.
-        printf "Leffa directory not found. Initializing or merging repository content...\n"
-        MODELS_TMP_DIR="/tmp/comfyui_models_clone_$(date +%s)"
-        printf "Cloning %s to temp location %s...\n" "${MODELS_REPO_URL}" "${MODELS_TMP_DIR}"
+        # Leffa directory or .git does not exist. Initialize/fetch/reset directly in the target directory.
+        printf "Leffa directory or .git not found. Initializing or syncing repository content in %s...\\n" "${MODELS_TARGET_DIR}"
 
-        # Clean up any previous temporary clone just in case
-        rm -rf "${MODELS_TMP_DIR}"
-        # Clone the repository recursively *without checking out* to the temp directory first
-        git clone --no-checkout "${MODELS_REPO_URL}" "${MODELS_TMP_DIR}"
-        if [[ $? -ne 0 ]]; then
-            printf "ERROR: Failed to clone repository structure %s to temp location %s\n" "${MODELS_REPO_URL}" "${MODELS_TMP_DIR}"
-            rm -rf "${MODELS_TMP_DIR}" # Clean up failed clone attempt
-        else
-            printf "Checking out repository content in %s...\n" "${MODELS_TMP_DIR}"
-            if (cd "${MODELS_TMP_DIR}" && git checkout main); then # Assuming main branch
-                # Pull LFS files within the temporary directory
-                printf "Pulling LFS files for %s in temp location...\n" "${MODELS_REPO_URL}"
-                if (cd "${MODELS_TMP_DIR}" && git lfs pull); then
-                    # Ensure the final target directory exists
-                    mkdir -p "${MODELS_TARGET_DIR}"
-                    # Merge the cloned repository contents into the target directory
-                    printf "Merging repository contents into %s...\n" "${MODELS_TARGET_DIR}"
-                    # Copy files, excluding .git first to overlay content
-                    rsync -a --exclude='.git' "${MODELS_TMP_DIR}/" "${MODELS_TARGET_DIR}/"
-                    # Copy the .git directory to make the target a git repo for future pulls
-                    rsync -a "${MODELS_TMP_DIR}/.git" "${MODELS_TARGET_DIR}/"
+        # Use a subshell to isolate directory changes and error handling
+        (
+            cd "${MODELS_TARGET_DIR}" || exit 1 # Exit subshell if cd fails
 
-                    # Clean up the temporary directory
-                    rm -rf "${MODELS_TMP_DIR}"
-                    printf "Repository initialization/merge complete in %s\n" "${MODELS_TARGET_DIR}"
-                else
-                    printf "ERROR: Failed to pull LFS files in temp location %s\n" "${MODELS_TMP_DIR}"
-                    rm -rf "${MODELS_TMP_DIR}" # Clean up failed LFS pull
-                fi
-            else
-                printf "ERROR: Failed to checkout main branch in temp location %s\n" "${MODELS_TMP_DIR}"
-                rm -rf "${MODELS_TMP_DIR}" # Clean up failed checkout
+            # Initialize git if .git directory doesn't exist
+            if [[ ! -d ".git" ]]; then
+                printf "Initializing git repository in %s...\\n" "$(pwd)"
+                git init || exit 1
             fi
+
+            # Add or update the remote origin URL
+            printf "Setting remote origin to %s...\\n" "${MODELS_REPO_URL}"
+            if git remote get-url origin > /dev/null 2>&1; then
+                git remote set-url origin "${MODELS_REPO_URL}" || exit 1
+            else
+                git remote add origin "${MODELS_REPO_URL}" || exit 1
+            fi
+
+            # Fetch the main branch from the remote
+            printf "Fetching main branch from origin...\\n"
+            git fetch origin main || exit 1
+
+            # Reset the working directory to match the fetched main branch
+            printf "Resetting local state to match origin/main...\\n"
+            git reset --hard origin/main || exit 1
+
+            # Ensure LFS is set up locally and pull LFS files
+            printf "Pulling LFS files...\\n"
+            git lfs install --skip-repo # Make sure LFS hooks are installed locally
+            git lfs pull || exit 1
+
+            printf "Repository initialization/sync complete in %s\\n" "$(pwd)"
+
+        ) # End of subshell
+
+        # Check the exit status of the subshell
+        if [[ $? -ne 0 ]]; then
+             printf "ERROR: Failed to initialize or sync repository in %s\\n" "${MODELS_TARGET_DIR}"
         fi
     fi
 }
