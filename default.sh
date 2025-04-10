@@ -226,7 +226,7 @@ function provisioning_get_default_workflow() {
 # New function to handle cloning/updating the main models repository
 function provisioning_get_models_repo() {
     MODELS_REPO_URL="https://huggingface.co/crimsoncult/comfyui-runpod-models"
-    MODELS_TARGET_DIR="${WORKSPACE}/storage/stable_diffusion/models"
+    MODELS_TARGET_DIR="${WORKSPACE}/ComfyUI/models"
 
     printf "Handling models repository: %s\n" "${MODELS_REPO_URL}"
     if [[ -d "${MODELS_TARGET_DIR}/.git" ]]; then
