@@ -235,31 +235,37 @@ function provisioning_get_default_workflow() {
 # New function to handle cloning/updating the main models repository
 function provisioning_get_models_repo() {
     MODELS_REPO_URL="https://huggingface.co/crimsoncult/comfyui-runpod-models"
-    MODELS_TARGET_DIR="/opt/ComfyUI/models"
-    GIT_DIR="${MODELS_TARGET_DIR}/.git"
+    MODELS_TARGET_DIR="${WORKSPACE}/ComfyUI/models"
+    LEFFA_CHECK_PATH="${MODELS_TARGET_DIR}/Leffa" # Check for a specific directory instead of .git
 
     printf "Handling models repository: %s in %s\n" "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}"
 
-    # Check if the git repository directory exists
-    if [[ -d "${GIT_DIR}" ]]; then
-        # Existing repository found, check if auto-update is enabled
+    # Check if the target directory exists and contains the 'Leffa' subdirectory
+    if [[ -d "${LEFFA_CHECK_PATH}" ]]; then
+        # Leffa directory exists, assume it's a git repo and check if auto-update is enabled
         if [[ ${AUTO_UPDATE,,} != "false" ]]; then
-            printf "Updating repository: %s...\n" "${MODELS_REPO_URL}"
+            printf "Leffa directory found. Updating repository: %s...\n" "${MODELS_REPO_URL}"
             # Pull latest changes and LFS files
-            ( cd "${MODELS_TARGET_DIR}" && git pull && git lfs pull )
+            # Note: This assumes MODELS_TARGET_DIR is the root of the git repo
+            ( cd "${MODELS_TARGET_DIR}" && git pull && git lfs pull ) || printf "WARN: Failed to update repository in %s. It might not be a git repository or pull failed.\n" "${MODELS_TARGET_DIR}"
         else
              printf "Skipping update for %s as AUTO_UPDATE is false.\n" "${MODELS_REPO_URL}"
         fi
     else
-        # No repository found, clone it
-        printf "Cloning repository: %s into %s...\n" "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}"
-        # Ensure parent directory exists if MODELS_TARGET_DIR is nested
-        # mkdir -p "$(dirname "${MODELS_TARGET_DIR}")" # Usually /opt/ComfyUI already exists
-        # Clone the repository recursively
+        # Leffa directory does not exist, clone the repository.
+        printf "Leffa directory not found. Cloning repository: %s...\n" "${MODELS_REPO_URL}"
+        # Ensure the parent directory exists before cloning
+        mkdir -p "$(dirname "${MODELS_TARGET_DIR}")"
+        # Clone the repository recursively to the target directory
         git clone "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}" --recursive
-        # Install LFS hooks system-wide (if not already done) and pull LFS files
-        printf "Pulling LFS files for %s...\n" "${MODELS_REPO_URL}"
-        ( cd "${MODELS_TARGET_DIR}" && git lfs install --system --skip-repo && git lfs pull )
+        if [[ $? -ne 0 ]]; then
+            printf "ERROR: Failed to clone repository %s to %s\n" "${MODELS_REPO_URL}" "${MODELS_TARGET_DIR}"
+        else
+            # Pull LFS files within the target directory
+            printf "Pulling LFS files for %s...\n" "${MODELS_REPO_URL}"
+            ( cd "${MODELS_TARGET_DIR}" && git lfs pull ) || printf "WARN: git lfs pull failed in %s\n" "${MODELS_TARGET_DIR}"
+            printf "Repository cloning complete in %s\n" "${MODELS_TARGET_DIR}"
+        fi
     fi
 }
 
