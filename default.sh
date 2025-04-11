@@ -10,6 +10,10 @@
 
 DEFAULT_WORKFLOW="https://raw.githubusercontent.com/timothyman1/comfyui-workflows/refs/heads/main/Leffa.json?token=GHSAT0AAAAAADB5OGPEZ32EERNVGCYNXN7KZ7XLBKA"
 
+# TODO add this somewhere:
+#  https://huggingface.co/ShilongLiu/GroundingDINO/resolve/main/groundingdino_swint_ogc.pth
+
+
 APT_PACKAGES=(
     #"package-1"
     #"package-2"
@@ -33,6 +37,8 @@ NODES=(
     "https://github.com/kijai/ComfyUI-KJNodes"
     "https://github.com/kijai/ComfyUI-segment-anything-2"
     "https://github.com/crystian/ComfyUI-Crystools"
+    "https://github.com/kijai/ComfyUI-Florence2"
+    "https://github.com/ltdrdata/ComfyUI-Impact-Subpack"
 )
 
 WORKFLOWS=(
